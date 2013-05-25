@@ -3,71 +3,59 @@ package main
 import (
     "fmt"
     "github.com/nfnt/resize"
-    "image"
     "image/jpeg"
     "net/http"
-    "regexp"
     "strconv"
     "log"
     "runtime"
 )
 
-func resizeImage(outputImage chan image.Image, width uint, height uint, img image.Image) {
-  log.Print("Resize start")
-  outputImage <- resize.Resize(uint(width), uint(height), img, resize.Lanczos3)
-  log.Print("Resize end")
-}
-
-func print404(msg string) {
-  http.StatusText(404)
-  fmt.Fprint(w, msg)
+func print404(response http.ResponseWriter, msg string) {
+  http.Error(response, msg, http.StatusNotFound)
   log.Print(msg)
 }
 
-func handler(w http.ResponseWriter, r *http.Request) {
-  log.Print("Got Request")
-  params := regexp.MustCompile("/").Split(r.URL.Path[1:], 3)
-  width, err := strconv.ParseUint(params[0], 10, 0)
+func handler(response http.ResponseWriter, request *http.Request) {
+  width, err := strconv.ParseUint(request.URL.Query()["width"][0], 10, 0)
   if err != nil {
-    print404("Could not determine width")
+    print404(response, "Could not determine width")
+    return
   }
-  height, err := strconv.ParseUint(params[1], 10, 0)
+  height, err := strconv.ParseUint(request.URL.Query()["height"][0], 10, 0)
   if err != nil {
-    print404("Could not determine height")
+    print404(response, "Could not determine height")
+    return
   }
 
-  imageUrl := "http://www.thestar.com/content/dam/thestar/uploads/2013/5/24/1369442175062.jpg.size.xlarge.promo.jpg"
+  imageUrl := request.URL.Query()["image_url"][0]
 
-  log.Print("Fetching Image")
   resp, err := http.Get(imageUrl)
-  log.Print("Got Image")
 
   if err != nil || resp.StatusCode != 200 {
     resp.Body.Close()
-    print404(fmt.Sprintf("Could not fetch image %s", imageUrl))
+    print404(response, fmt.Sprintf("Could not fetch image %s", imageUrl))
   } else {
-    log.Print("Begin Decode")
     img, err := jpeg.Decode(resp.Body)
-    log.Print("End Decode")
+
     resp.Body.Close()
+
     if err != nil {
-      print404(fmt.Sprintf("Could not decode image %s", imageUrl))
+      print404(response, fmt.Sprintf("Could not decode image %s", imageUrl))
+      return
     }
 
-    var outputImage chan image.Image = make(chan image.Image)
+    image := resize.Resize(uint(width), uint(height), img, resize.Lanczos3)
 
-    go resizeImage(outputImage, uint(width), uint(height), img)
+    response.Header().Set("Content-Type", "image/jpeg")
+    jpeg.Encode(response, image, nil)
 
-    image := <- outputImage
-
-    w.Header().Set("Content-Type", "image/jpeg")
-    log.Print("Sending Response")
-    jpeg.Encode(w, image, nil)
+    log.Printf("Resized %s to %dx%d", imageUrl, width, height)
   }
 }
 
 func main() {
     runtime.GOMAXPROCS(runtime.NumCPU())
+
     http.HandleFunc("/", handler)
     http.ListenAndServe(":8080", nil)
 }
