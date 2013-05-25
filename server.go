@@ -18,11 +18,24 @@ func resizeImage(outputImage chan image.Image, width uint, height uint, img imag
   log.Print("Resize end")
 }
 
+func print404(msg string) {
+  http.StatusText(404)
+  fmt.Fprint(w, msg)
+  log.Print(msg)
+}
+
 func handler(w http.ResponseWriter, r *http.Request) {
   log.Print("Got Request")
   params := regexp.MustCompile("/").Split(r.URL.Path[1:], 3)
   width, err := strconv.ParseUint(params[0], 10, 0)
+  if err != nil {
+    print404("Could not determine width")
+  }
   height, err := strconv.ParseUint(params[1], 10, 0)
+  if err != nil {
+    print404("Could not determine height")
+  }
+
   imageUrl := "http://www.thestar.com/content/dam/thestar/uploads/2013/5/24/1369442175062.jpg.size.xlarge.promo.jpg"
 
   log.Print("Fetching Image")
@@ -31,18 +44,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
   if err != nil || resp.StatusCode != 200 {
     resp.Body.Close()
-    http.StatusText(404)
-    fmt.Fprintf(w, "Could not fetch image %s", imageUrl)
-    log.Printf("Could not fetch image %s", imageUrl)
+    print404(fmt.Sprintf("Could not fetch image %s", imageUrl))
   } else {
     log.Print("Begin Decode")
     img, err := jpeg.Decode(resp.Body)
     log.Print("End Decode")
     resp.Body.Close()
     if err != nil {
-      http.StatusText(404)
-      fmt.Fprintf(w, "Could not decode image %s", imageUrl)
-      log.Printf("Could not decode image %s", imageUrl)
+      print404(fmt.Sprintf("Could not decode image %s", imageUrl))
     }
 
     var outputImage chan image.Image = make(chan image.Image)
