@@ -44,7 +44,7 @@ func handler(response http.ResponseWriter, request *http.Request) {
       return
     }
 
-    image := resize.Resize(uint(width), uint(height), img, resize.Lanczos3)
+    image := resize.Resize(uint(width), uint(height), img, resize.NearestNeighbor)
 
     response.Header().Set("Content-Type", "image/jpeg")
     jpeg.Encode(response, image, nil)
