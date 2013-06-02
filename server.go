@@ -1,9 +1,12 @@
 package main
 
 import (
+    "flag"
     "fmt"
     "github.com/nfnt/resize"
+    "image"
     "image/jpeg"
+    "image/png"
     "net/http"
     "strconv"
     "log"
@@ -35,7 +38,7 @@ func handler(response http.ResponseWriter, request *http.Request) {
     resp.Body.Close()
     print404(response, fmt.Sprintf("Could not fetch image %s", imageUrl))
   } else {
-    img, err := jpeg.Decode(resp.Body)
+    img, format, err := image.Decode(resp.Body)
 
     resp.Body.Close()
 
@@ -46,16 +49,27 @@ func handler(response http.ResponseWriter, request *http.Request) {
 
     image := resize.Resize(uint(width), uint(height), img, resize.NearestNeighbor)
 
-    response.Header().Set("Content-Type", "image/jpeg")
-    jpeg.Encode(response, image, nil)
+    response.Header().Set("Content-Type", "image/png")
 
     log.Printf("Resized %s to %dx%d", imageUrl, width, height)
+    
+    switch format {
+    case "jpeg":
+      jpeg.Encode(response, image, nil)
+    default:
+      png.Encode(response, image)
+    }
   }
 }
 
 func main() {
     runtime.GOMAXPROCS(runtime.NumCPU())
 
+    var port = flag.Int("port", 8080, "Port to listen on")
+    flag.Parse()
+
+    log.Printf("Starting iamge rescaler on port %d", *port)
+
     http.HandleFunc("/", handler)
-    http.ListenAndServe(":8080", nil)
+    http.ListenAndServe(":" + strconv.Itoa(*port), nil)
 }
